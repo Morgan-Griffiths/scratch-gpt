@@ -25,3 +25,7 @@ pnpm i <package>
 
 - [x] Code is not copied on the first try
 - [x] Always check if the scratch file exists before trying to copy code
+
+## Format
+
+// --- Original file: /path/to/test/file1.txt (Lines: 1-3) ---
