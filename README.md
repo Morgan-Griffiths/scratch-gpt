@@ -19,7 +19,6 @@ pnpm i <package>
 - [x] Create scratch file
 - [x] Copy code into scratch file using Shift+Command+C
 - [ ] Sync scratch file modifications back to code file
-- [ ] Update scratch file when code file is modified (avoid loop)
 
 ## Issues
 

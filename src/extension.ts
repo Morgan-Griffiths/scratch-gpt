@@ -80,6 +80,7 @@ export async function copyCodeToScratchFile(
   context: vscode.ExtensionContext,
   scratchFileUri: vscode.Uri | undefined
 ) {
+  // Logic for creating or opening the scratch file
   if (scratchFileUri) {
     try {
       await vscode.workspace.fs.stat(scratchFileUri);
@@ -125,9 +126,6 @@ export async function copyCodeToScratchFile(
     endLine,
     endCharacter,
   };
-
-  // const document = await vscode.workspace.openTextDocument(scratchFileUri);
-  // await vscode.window.showTextDocument(document, { preview: false });
   const scratchDocument = await vscode.workspace.openTextDocument(
     scratchFileUri
   );
