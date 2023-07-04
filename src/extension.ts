@@ -81,6 +81,10 @@ export async function copyCodeToScratchFile(
     if (!scratchFileUri) {
       return;
     }
+    console.log("scratchFileUri", scratchFileUri);
+    // Open the newly created scratch file
+    // const document = await vscode.workspace.openTextDocument(scratchFileUri);
+    // await vscode.window.showTextDocument(document, { preview: false });
   }
 
   const activeEditor = vscode.window.activeTextEditor;
@@ -116,6 +120,8 @@ export async function copyCodeToScratchFile(
     endCharacter,
   };
 
+  // const document = await vscode.workspace.openTextDocument(scratchFileUri);
+  // await vscode.window.showTextDocument(document, { preview: false });
   const scratchDocument = await vscode.workspace.openTextDocument(
     scratchFileUri
   );
@@ -165,8 +171,6 @@ async function createOrOpenScratchFile(
 
   try {
     const scratchFileUri = vscode.Uri.file(scratchFilePath);
-    const document = await vscode.workspace.openTextDocument(scratchFileUri);
-    await vscode.window.showTextDocument(document, { preview: false });
     return scratchFileUri;
   } catch (error: any) {
     vscode.window.showErrorMessage(
