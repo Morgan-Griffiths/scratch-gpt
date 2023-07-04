@@ -23,5 +23,5 @@ pnpm i <package>
 
 ## Issues
 
-- [ ] Code is not copied on the first try
-- [ ] Always check if the scratch file exists before trying to copy code
+- [x] Code is not copied on the first try
+- [x] Always check if the scratch file exists before trying to copy code
