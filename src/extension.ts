@@ -76,15 +76,17 @@ export async function copyCodeToScratchFile(
   context: vscode.ExtensionContext,
   scratchFileUri: vscode.Uri | undefined
 ) {
-  if (!scratchFileUri) {
-    scratchFileUri = await createOrOpenScratchFile(context);
-    if (!scratchFileUri) {
-      return;
+  if (scratchFileUri) {
+    try {
+      await vscode.workspace.fs.stat(scratchFileUri);
+    } catch (error) {
+      scratchFileUri = await createOrOpenScratchFile(context);
     }
-    console.log("scratchFileUri", scratchFileUri);
-    // Open the newly created scratch file
-    // const document = await vscode.workspace.openTextDocument(scratchFileUri);
-    // await vscode.window.showTextDocument(document, { preview: false });
+  } else {
+    scratchFileUri = await createOrOpenScratchFile(context);
+  }
+  if (!scratchFileUri) {
+    return;
   }
 
   const activeEditor = vscode.window.activeTextEditor;
