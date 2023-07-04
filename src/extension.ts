@@ -6,6 +6,10 @@ import * as path from "path";
 
 import * as diff from "diff"; // Make sure to install the 'diff' library: npm install diff
 
+const log = vscode.window.createOutputChannel("gpt-scratch log");
+
+let scratchFileWatcher: vscode.FileSystemWatcher | undefined = undefined;
+
 export async function calculateDiff(scratchFileUri: vscode.Uri) {
   const scratchDocument = await vscode.workspace.openTextDocument(
     scratchFileUri
@@ -182,6 +186,10 @@ async function createOrOpenScratchFile(
   }
 }
 
+export async function scratchFileChanged(uri: vscode.Uri) {
+  log.appendLine("file changed! " + uri);
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
@@ -212,16 +220,27 @@ export async function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, your extension "scratch-gpt" is now active!');
 
   const scratchFileUri = await createOrOpenScratchFile(context);
+  if (!scratchFileUri) return;
 
-  let disposableCopy = vscode.commands.registerCommand(
-    "scratch-gpt.copyToScratchFile",
-    () => {
-      copyCodeToScratchFile(context, scratchFileUri);
-    }
+  scratchFileWatcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(
+      path.dirname(scratchFileUri.path),
+      path.basename(scratchFileUri.path)
+    )
   );
+  scratchFileWatcher.onDidChange(scratchFileChanged);
 
-  context.subscriptions.push(disposableCopy);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("scratch-gpt.copyToScratchFile", () => {
+      copyCodeToScratchFile(context, scratchFileUri);
+    })
+  );
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  if (scratchFileWatcher) {
+    scratchFileWatcher.dispose();
+    scratchFileWatcher = undefined;
+  }
+}
