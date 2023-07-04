@@ -9,15 +9,14 @@ import * as diff from "diff"; // Make sure to install the 'diff' library: npm in
 const log = vscode.window.createOutputChannel("gpt-scratch log");
 
 let scratchFileWatcher: vscode.FileSystemWatcher | undefined = undefined;
+const regex =
+  /\/\/ --- Original file: (.*?) \(Lines: (\d+)-(\d+)\) ---\n\n([\s\S]*?)(?=\n\/\/ --- Original file:|\s*$)/g;
 
-export async function calculateDiff(scratchFileUri: vscode.Uri) {
+export async function parseScratchFile(scratchFileUri: vscode.Uri) {
   const scratchDocument = await vscode.workspace.openTextDocument(
     scratchFileUri
   );
   const scratchFileContent = scratchDocument.getText();
-
-  const regex =
-    /\/\/ --- Original file: (.*?) \(Lines: (\d+)-(\d+)\) ---\n\n([\s\S]*?)(?=\n\/\/ --- Original file:|\s*$)/g;
 
   let match;
 
@@ -36,14 +35,17 @@ export async function calculateDiff(scratchFileUri: vscode.Uri) {
       code: match[4],
     });
   }
-  console.log("codeSnippets", codeSnippets);
+  return codeSnippets;
+}
+
+export async function calculateDiff(scratchFileUri: vscode.Uri) {
+  const codeSnippets = await parseScratchFile(scratchFileUri);
   const changes: Array<{
     originalFilePath: string;
     startLine: number;
     endLine: number;
     diff: diff.Change[];
   }> = [];
-
   for (const snippet of codeSnippets) {
     try {
       const originalDocument = await vscode.workspace.openTextDocument(
