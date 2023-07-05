@@ -20,6 +20,10 @@
       {
         "command": "scratch-gpt.openTestWorkspace",
         "title": "Open Test Workspace"
+      },
+      {
+        "command": "scratch-gpt.updateSourceFiles",
+        "title": "Update Source Files from Scratch File"
       }
     ],
     "keybindings": [
@@ -27,6 +31,10 @@
         "command": "scratch-gpt.copyToScratchFile",
         "key": "cmd+shift+c",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "scratch-gpt.updateSourceFiles",
+        "key": "option+shift+u"
       }
     ]
   },

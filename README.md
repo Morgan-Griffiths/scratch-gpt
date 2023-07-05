@@ -18,7 +18,7 @@ pnpm i <package>
 
 - [x] Create scratch file
 - [x] Copy code into scratch file using Shift+Command+C
-- [ ] Sync scratch file modifications back to code file
+- [ ] Sync scratch file modifications back to code file AND update all snippets in the scratch file
 
 ## Issues
 
@@ -28,3 +28,11 @@ pnpm i <package>
 ## Format
 
 // --- Original file: /path/to/test/file1.txt (Lines: 1-3) ---
+
+## Update the source files from the scratch file
+
+group snippets by file path
+everytime a snippet gets saved, update all snippets from that file
+update all the snippets lower in the source file -> update source lines.
+
+click inside a function to copy the entire function to the scratch file.

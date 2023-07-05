@@ -9,8 +9,141 @@ import * as diff from "diff"; // Make sure to install the 'diff' library: npm in
 const log = vscode.window.createOutputChannel("gpt-scratch log");
 
 let scratchFileWatcher: vscode.FileSystemWatcher | undefined = undefined;
-const regex =
-  /\/\/ --- Original file: (.*?) \(Lines: (\d+)-(\d+)\) ---\n\n([\s\S]*?)(?=\n\/\/ --- Original file:|\s*$)/g;
+export async function updateSourceFiles(scratchFileUri: vscode.Uri) {
+  const changes = await calculateDiff(scratchFileUri);
+  log.appendLine("Changes: " + JSON.stringify(changes, null, 2));
+  log.show();
+  // Group the changes by file path
+  const changesByFilePath = changes.reduce((groups, change) => {
+    (groups[change.originalFilePath] =
+      groups[change.originalFilePath] || []).push(change);
+    return groups;
+  }, {} as Record<string, typeof changes>);
+
+  vscode.window.showInformationMessage(
+    `Applying ${changes.length} changes to ${
+      Object.keys(changesByFilePath).length
+    } files...`
+  );
+
+  // For each file, apply the changes from top to bottom
+  for (const filePath in changesByFilePath) {
+    const changesForFile = changesByFilePath[filePath];
+
+    // Sort changes for this file from top to bottom
+    changesForFile.sort((a, b) => a.startLine - b.startLine);
+
+    const originalDocument = await vscode.workspace.openTextDocument(filePath);
+    const edit = new vscode.WorkspaceEdit();
+
+    let lineNumberAdjustment = 0;
+    for (const change of changesForFile) {
+      for (const part of change.diff) {
+        const startLine = change.startLine + lineNumberAdjustment;
+        const endLine = change.endLine + lineNumberAdjustment;
+
+        if (part.removed) {
+          const range = new vscode.Range(
+            new vscode.Position(startLine, 0),
+            new vscode.Position(endLine + 1, 0)
+          );
+          edit.delete(originalDocument.uri, range);
+          lineNumberAdjustment -= part.count ?? 0;
+        }
+
+        if (part.added) {
+          const position = new vscode.Position(startLine, 0);
+          edit.insert(originalDocument.uri, position, part.value);
+          lineNumberAdjustment += part.count ?? 0;
+        }
+      }
+    }
+
+    await vscode.workspace.applyEdit(edit);
+
+    // Update line numbers in scratch file
+    const scratchDocument = await vscode.workspace.openTextDocument(
+      scratchFileUri
+    );
+    const scratchFileContent = scratchDocument.getText();
+    const regex = new RegExp(
+      `(${escapeRegExp(filePath)}) \\(Lines: (\\d+)-(\\d+)\\)`,
+      "g"
+    );
+    let match;
+
+    const scratchFileEdit = new vscode.WorkspaceEdit();
+
+    while ((match = regex.exec(scratchFileContent)) !== null) {
+      const originalFilePath = match[1];
+      const startLine = parseInt(match[2], 10) - 1;
+      const endLine = parseInt(match[3], 10) - 1;
+
+      if (filePath === originalFilePath) {
+        const newStartLine = startLine + lineNumberAdjustment;
+        const newEndLine = endLine + lineNumberAdjustment;
+
+        const oldLineRange = `${match[2]}-${match[3]}`;
+        const newLineRange = `${newStartLine + 1}-${newEndLine + 1}`;
+
+        const oldRange = scratchDocument.getWordRangeAtPosition(
+          new vscode.Position(match.index, 0)
+        );
+        if (oldRange) {
+          scratchFileEdit.replace(scratchFileUri, oldRange, newLineRange);
+        }
+      }
+    }
+
+    await vscode.workspace.applyEdit(scratchFileEdit);
+  }
+}
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+\-?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+}
+
+export async function updateScratchFileLineNumbers(
+  scratchFileUri: vscode.Uri,
+  updatedFilePath: string,
+  lineNumberAdjustment: number
+) {
+  const codeSnippets = await parseScratchFile(scratchFileUri);
+
+  const snippetsToUpdate = codeSnippets.filter(
+    (snippet) =>
+      snippet.originalFilePath === updatedFilePath && snippet.startLine >= 0
+  );
+
+  const scratchDocument = await vscode.workspace.openTextDocument(
+    scratchFileUri
+  );
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const snippet of snippetsToUpdate) {
+    const oldMetadataLine = `// --- Original file: ${
+      snippet.originalFilePath
+    } (Lines: ${snippet.startLine + 1}-${snippet.endLine + 1}) ---`;
+    const newMetadataLine = `// --- Original file: ${
+      snippet.originalFilePath
+    } (Lines: ${snippet.startLine + lineNumberAdjustment + 1}-${
+      snippet.endLine + lineNumberAdjustment + 1
+    }) ---`;
+
+    const scratchFileContent = scratchDocument.getText();
+    const oldMetadataLineIndex = scratchFileContent.indexOf(oldMetadataLine);
+
+    if (oldMetadataLineIndex !== -1) {
+      const oldMetadataLineRange = new vscode.Range(
+        scratchDocument.positionAt(oldMetadataLineIndex),
+        scratchDocument.positionAt(
+          oldMetadataLineIndex + oldMetadataLine.length
+        )
+      );
+      edit.replace(scratchFileUri, oldMetadataLineRange, newMetadataLine);
+    }
+  }
+  await vscode.workspace.applyEdit(edit);
+}
 
 export async function parseScratchFile(scratchFileUri: vscode.Uri) {
   const scratchDocument = await vscode.workspace.openTextDocument(
@@ -26,6 +159,8 @@ export async function parseScratchFile(scratchFileUri: vscode.Uri) {
     endLine: number;
     code: string;
   }> = [];
+  const regex =
+    /\/\/ --- Original file: (.*?) \(Lines: (\d+)-(\d+)\) ---(?:[\n\s]+)([\s\S]*?)(?=\/\/ --- Original file:|\s*$)/g;
 
   while ((match = regex.exec(scratchFileContent)) !== null) {
     codeSnippets.push({
@@ -40,6 +175,8 @@ export async function parseScratchFile(scratchFileUri: vscode.Uri) {
 
 export async function calculateDiff(scratchFileUri: vscode.Uri) {
   const codeSnippets = await parseScratchFile(scratchFileUri);
+  log.appendLine(`Parsed: ${JSON.stringify(codeSnippets, null, 2)}`);
+  log.show();
   const changes: Array<{
     originalFilePath: string;
     startLine: number;
@@ -58,10 +195,13 @@ export async function calculateDiff(scratchFileUri: vscode.Uri) {
       const originalCode = originalLines
         .slice(snippet.startLine, snippet.endLine + 1)
         .join("\n");
-      const diffs = diff.diffLines(originalCode, snippet.code);
-      const hasChanges = diffs.some((change) => change.added || change.removed);
 
-      if (hasChanges) {
+      const diffs = diff.diffLines(originalCode, snippet.code);
+
+      // const patchedContent = diff.applyPatch(originalFileContent, patch);
+      // const hasChanges = patchedContent !== originalFileContent;
+
+      if (originalCode !== snippet.code) {
         changes.push({
           originalFilePath: snippet.originalFilePath,
           startLine: snippet.startLine,
@@ -222,18 +362,28 @@ export async function activate(context: vscode.ExtensionContext) {
   const scratchFileUri = await createOrOpenScratchFile(context);
   if (!scratchFileUri) return;
 
-  scratchFileWatcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(
-      path.dirname(scratchFileUri.path),
-      path.basename(scratchFileUri.path)
-    )
-  );
-  scratchFileWatcher.onDidChange(scratchFileChanged);
+  // scratchFileWatcher = vscode.workspace.createFileSystemWatcher(
+  //   new vscode.RelativePattern(
+  //     path.dirname(scratchFileUri.path),
+  //     path.basename(scratchFileUri.path)
+  //   )
+  // );
+  // scratchFileWatcher.onDidChange(scratchFileChanged);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("scratch-gpt.copyToScratchFile", () => {
       copyCodeToScratchFile(context, scratchFileUri);
     })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "scratch-gpt.updateSourceFiles",
+      async () => {
+        if (!scratchFileUri) return;
+        await updateSourceFiles(scratchFileUri);
+      }
+    )
   );
 }
 
